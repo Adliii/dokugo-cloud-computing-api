@@ -141,11 +141,11 @@ const userRoutes = (server) => {
       },
     },
     {
-      method: "GET",
+      method: "POST",
       path: "/predict",
       handler: predictExpenses,
       options: {
-        auth: "jwt",
+        auth: "jwt", // Tambahkan autentikasi jika diperlukan
       },
     },
   ]);
