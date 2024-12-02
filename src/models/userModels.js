@@ -8,15 +8,18 @@ const User = sequelize.define(
       type: DataTypes.STRING,
       primaryKey: true,
     },
+    firstname: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    lastname: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
     username: {
       type: DataTypes.STRING,
       allowNull: false,
       unique: true,
-    },
-    phone_number: {
-      // Mengganti 'no_hp' dengan 'phone_number'
-      type: DataTypes.STRING,
-      allowNull: false,
     },
     email: {
       type: DataTypes.STRING,
@@ -27,8 +30,7 @@ const User = sequelize.define(
       type: DataTypes.STRING,
       allowNull: false,
     },
-    avatar: {
-      // Mengganti 'photo' dengan 'avatar'
+    photo: {
       type: DataTypes.STRING,
       allowNull: true,
     },
