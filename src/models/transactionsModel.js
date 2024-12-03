@@ -4,7 +4,6 @@ const sequelize = require("../config/db");
 const path = require("path");
 const axios = require("axios");
 
-
 const Transaction = sequelize.define(
   "Transaction",
   {
@@ -64,32 +63,4 @@ const Transaction = sequelize.define(
   }
 );
 
-// Fungsi untuk prediksi pengeluaran
-const predictExpenses = async (request, h) => {
-  try {
-    const { amount, lag_1_expenses, lag_2_expenses, category_encoded, day_of_week, is_weekend } = request.payload;
-
-    // Data yang akan dikirim ke API Flask
-    const inputData = {
-      amount,
-      Lag_1_Expenses: lag_1_expenses,
-      Lag_2_Expenses: lag_2_expenses,
-      category_encoded,
-      day_of_week,
-      is_weekend,
-    };
-
-    // Panggil API Flask
-    const response = await axios.post("http://localhost:5000/predict", inputData);
-
-    return h.response({
-      message: "Prediksi berhasil",
-      prediction: response.data,
-    }).code(200);
-  } catch (error) {
-    console.error("Error saat memanggil API Flask:", error.message);
-    return h.response({ error: "Gagal melakukan prediksi" }).code(500);
-  }
-};
-
-module.exports = { predictExpenses };
+module.exports = Transaction;
