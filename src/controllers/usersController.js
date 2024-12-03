@@ -6,6 +6,9 @@ const jwt = require("@hapi/jwt");
 const jwtdecode = require("jsonwebtoken");
 const { nanoid } = require("nanoid");
 const nodemailer = require("nodemailer"); 
+const axios = require("axios");
+const otpCache = {}; 
+
 
 // Skema Validasi JOI
 const registerSchema = Joi.object({
@@ -353,6 +356,11 @@ const verifyOtp = async (request, h) => {
   try {
     const { email, otp } = request.payload;
 
+    // Periksa apakah OTP ada di cache
+  if (!otpCache[email] || otpCache[email] !== otp) {
+    return h.response({ error: "OTP tidak valid atau sudah kedaluwarsa" }).code(400);
+  }
+
     // Ambil OTP dari memory cache
     const storedOtp = otpCache.get(email);
     if (!storedOtp) {
@@ -553,6 +561,34 @@ const deleteTransaction = async (request, h) => {
   }
 };
 
+const predictExpenses = async (request, h) => {
+  try {
+    const { amount, lag_1_expenses, lag_2_expenses, category_encoded, day_of_week, is_weekend } = request.payload;
+
+    // Data yang akan dikirim ke API Flask
+    const inputData = {
+      amount,
+      Lag_1_Expenses: lag_1_expenses,
+      Lag_2_Expenses: lag_2_expenses,
+      category_encoded,
+      day_of_week,
+      is_weekend,
+    };
+
+    // Panggil API Flask
+    const response = await axios.post("http://localhost:5000/predict", inputData);
+
+    return h.response({
+      message: "Prediksi berhasil",
+      prediction: response.data,
+    }).code(200);
+  } catch (error) {
+    console.error("Error saat memanggil API Flask:", error.message);
+    return h.response({ error: "Gagal melakukan prediksi" }).code(500);
+  }
+};
+
+
 module.exports = {
   register,
   login,
@@ -568,4 +604,5 @@ module.exports = {
   forgotPassword,
   verifyOtp,
   resetPassword,
+  predictExpenses,
 };
