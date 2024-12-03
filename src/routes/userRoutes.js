@@ -8,17 +8,13 @@ const {
   forgotPassword,
   verifyOtp,
   resetPassword,
-} = require("../controllers/usersController");
-
-const {
   addTransaction,
   getTransactions,
   getTransaction,
   updateTransaction,
   deleteTransaction,
-} = require("../controllers/transactionController");
-
-const { predictExpenses } = require("../controllers/transactionController");
+  predictExpenses, // Fungsi prediksi
+} = require("../controllers/usersController");
 
 const userRoutes = (server) => {
   server.route([
