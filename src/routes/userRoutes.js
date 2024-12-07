@@ -5,20 +5,12 @@ const {
   updateProfilePhoto,
   viewProfile,
   editProfile,
+  deleteAccount,
   forgotPassword,
   verifyOtp,
   resetPassword,
+  getAllUsers,
 } = require("../controllers/usersController");
-
-const {
-  addTransaction,
-  getTransactions,
-  getTransaction,
-  updateTransaction,
-  deleteTransaction,
-} = require("../controllers/transactionController");
-
-const { predictExpenses } = require("../controllers/transactionController");
 
 const userRoutes = (server) => {
   server.route([
@@ -40,14 +32,14 @@ const userRoutes = (server) => {
     },
     {
       method: "GET",
-      path: "/profile", // Perbaikan di sini
+      path: "/profile",
       handler: viewProfile,
       options: {
         auth: "jwt",
       },
     },
     {
-      method: "PUT", // Menambahkan rute untuk edit profil
+      method: "PUT",
       path: "/profile/edit",
       handler: editProfile,
       options: {
@@ -55,7 +47,15 @@ const userRoutes = (server) => {
       },
     },
     {
-      method: "POST",
+      method: "DELETE", // Rute untuk delete account
+      path: "/profile/delete",
+      handler: deleteAccount,
+      options: {
+        auth: "jwt",
+      },
+    },
+    {
+      method: "PATCH",
       path: "/profile/photo",
       handler: updateProfilePhoto,
       options: {
@@ -68,7 +68,7 @@ const userRoutes = (server) => {
       },
     },
     {
-      method: "POST", // Menambahkan route logout
+      method: "POST", 
       path: "/logout",
       handler: logout,
       options: {
@@ -78,7 +78,7 @@ const userRoutes = (server) => {
     },
     {
       method: "POST",
-      path: "/forgotPassword", // Rute forgotPassword
+      path: "/forgotPassword",
       handler: forgotPassword,
       options: {
         auth: false,
@@ -101,52 +101,10 @@ const userRoutes = (server) => {
       },
     },
     {
-      method: "POST",
-      path: "/transactions", // Menambahkan transaksi baru
-      handler: addTransaction,
-      options: {
-        auth: "jwt",
-      },
-    },
-    {
       method: "GET",
-      path: "/transactions", // Mendapatkan daftar transaksi
-      handler: getTransactions,
-      options: {
-        auth: "jwt",
-      },
-    },
-    {
-      method: "GET",
-      path: "/transactions/{id}", // Mendapatkan detail transaksi berdasarkan ID
-      handler: getTransaction,
-      options: {
-        auth: "jwt",
-      },
-    },
-    {
-      method: "PUT",
-      path: "/transactions/{id}", // Mengupdate transaksi
-      handler: updateTransaction,
-      options: {
-        auth: "jwt",
-      },
-    },
-    {
-      method: "DELETE",
-      path: "/transactions/{id}", // Menghapus transaksi
-      handler: deleteTransaction,
-      options: {
-        auth: "jwt",
-      },
-    },
-    {
-      method: "POST",
-      path: "/predict",
-      handler: predictExpenses,
-      options: {
-        auth: "jwt", // Tambahkan autentikasi jika diperlukan
-      },
+      path: "/users",
+      handler: getAllUsers,
+      options: { auth: false },
     },
   ]);
 };

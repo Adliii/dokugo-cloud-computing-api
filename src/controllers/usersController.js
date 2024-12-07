@@ -3,15 +3,17 @@ const bcrypt = require("bcrypt");
 const User = require("../models/userModels");
 const TokenBlacklist = require("../models/tokenBlacklistModel");
 const jwt = require("@hapi/jwt");
+const nodemailer = require("nodemailer");
 const jwtdecode = require("jsonwebtoken");
 const { nanoid } = require("nanoid");
-const nodemailer = require("nodemailer"); 
+const { Op } = require("sequelize");
+const NodeCache = require("node-cache");
+const otpCache = new NodeCache({ stdTTL: 300 }); // Cache dengan TTL (Time to Live) 5 Menit
 
-// Skema Validasi JOI
+// Skema Validasi JOI untuk registrasi
 const registerSchema = Joi.object({
-  firstname: Joi.string().min(2).max(30).required(),
-  lastname: Joi.string().min(2).max(30).required(),
   username: Joi.string().alphanum().min(3).max(30).required(),
+  phone_number: Joi.string().min(10).max(15).required(), // Validasi nomor telepon
   email: Joi.string().email().required(),
   password: Joi.string().min(6).required(),
 }).messages({
@@ -31,7 +33,7 @@ const register = async (request, h) => {
       return h.response({ error: error.details[0].message }).code(400);
     }
 
-    const { firstname, lastname, username, email, password } = value;
+    const { username, phone_number, email, password } = value;
 
     const existingUser =
       (await User.findOne({ where: { email } })) ||
@@ -44,17 +46,16 @@ const register = async (request, h) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const userId = nanoid();
-    const defaultProfilePhotoUrl =
-      "https://storage.googleapis.com/dokugo-storage/default.png";
+    const defaultAvatarUrl =
+      "https://storage.googleapis.com/dokugo-storage/default-avatar.png"; // URL avatar default
 
     const newUser = await User.create({
       id: userId,
-      firstname,
-      lastname,
       username,
+      phone_number, // Menambahkan phone_number
       email,
       password: hashedPassword,
-      photo: defaultProfilePhotoUrl,
+      avatar: defaultAvatarUrl, // Menambahkan avatar
     });
 
     return h
@@ -62,11 +63,10 @@ const register = async (request, h) => {
         message: "User berhasil didaftarkan",
         data: {
           id: newUser.id,
-          firstname: newUser.firstname,
-          lastname: newUser.lastname,
           username: newUser.username,
+          phone_number: newUser.phone_number,
           email: newUser.email,
-          photo: newUser.photo,
+          avatar: newUser.avatar,
         },
       })
       .code(201);
@@ -95,10 +95,16 @@ const login = async (request, h) => {
       return h.response({ error: "Email salah" }).code(401);
     }
 
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) {
+    if (user.password !== password) {
       return h.response({ error: "Password salah" }).code(401);
     }
+    
+    // password nya gweh ganti dulu jadi gk pake bcrypt buat tes 
+
+    // const match = await bcrypt.compare(password, user.password);
+    // if (!match) {
+    //   return h.response({ error: "Password salah" }).code(401);
+    // }
 
     const token = jwt.token.generate(
       {
@@ -150,10 +156,10 @@ const logout = async (request, h) => {
   }
 };
 
-
+// Fungsi: Update Profile Photo (Avatar)
 const updateProfilePhoto = async (request, h) => {
   try {
-    console.log("Received payload:", request.payload); // Menambahkan log untuk mengecek payload
+    console.log("Received payload:", request.payload);
 
     const userId = request.auth.credentials.user.id;
     const user = await User.findByPk(userId);
@@ -162,40 +168,34 @@ const updateProfilePhoto = async (request, h) => {
       return h.response({ error: "User tidak ditemukan" }).code(404);
     }
 
-    // Memeriksa apakah payload berisi avatarUrl
     const { avatarUrl } = request.payload;
-    console.log("Avatar URL received:", avatarUrl); // Menambahkan log untuk memeriksa avatarUrl
+    console.log("Avatar URL received:", avatarUrl);
 
     if (!avatarUrl) {
       return h.response({ error: "Avatar URL tidak ditemukan" }).code(400);
     }
 
-    // Daftar avatar yang disediakan
     const availableAvatars = [
       "https://storage.googleapis.com/dokugo-storage/avatar1.png",
       "https://storage.googleapis.com/dokugo-storage/avatar2.png",
       "https://storage.googleapis.com/dokugo-storage/avatar3.png",
     ];
 
-    // Memeriksa apakah avatarUrl ada dalam daftar avatar yang tersedia
     if (!availableAvatars.includes(avatarUrl)) {
       return h.response({ error: "Avatar yang dipilih tidak valid" }).code(400);
     }
 
-    // Memperbarui foto pengguna
-    user.photo = avatarUrl;
+    user.avatar = avatarUrl;
     await user.save();
 
     return h
-      .response({ message: "Avatar berhasil diperbarui", photoUrl: avatarUrl })
+      .response({ message: "Avatar berhasil diperbarui", avatarUrl: avatarUrl })
       .code(200);
   } catch (error) {
     console.error(error);
     return h.response({ error: "Internal Server Error" }).code(500);
   }
 };
-
-
 
 // Fungsi: Lihat Profil
 const viewProfile = async (request, h) => {
@@ -211,11 +211,10 @@ const viewProfile = async (request, h) => {
       .response({
         user: {
           id: user.id,
-          // firstname: user.firstname,
-          // lastname: user.lastname,
           username: user.username,
           email: user.email,
-          photoUrl: user.photo,
+          avatarUrl: user.avatar,
+          // phone_number: user.phone_number, // Menambahkan nomor telepon
         },
       })
       .code(200);
@@ -225,12 +224,11 @@ const viewProfile = async (request, h) => {
   }
 };
 
-// Skema Validasi JOI untuk Edit Profil
+// Fungsi: Edit Profil
 const editProfileSchema = Joi.object({
-  firstname: Joi.string().min(2).max(30).optional(),
-  lastname: Joi.string().min(2).max(30).optional(),
   username: Joi.string().alphanum().min(3).max(30).optional(),
   email: Joi.string().email().optional(),
+  phone_number: Joi.string().min(10).max(15).optional(), // Validasi nomor telepon
 }).messages({
   "string.max":
     "{{#label}} panjangnya harus kurang dari atau sama dengan {{#limit}} karakter",
@@ -254,9 +252,8 @@ const editProfile = async (request, h) => {
       return h.response({ error: "User tidak ditemukan" }).code(404);
     }
 
-    const { firstname, lastname, username, email } = value;
+    const { username, email, phone_number } = value;
 
-    // Cek apakah email atau username sudah digunakan oleh user lain
     if (email) {
       const existingEmail = await User.findOne({
         where: { email, id: { [Op.ne]: userId } },
@@ -275,25 +272,41 @@ const editProfile = async (request, h) => {
       }
     }
 
-    // Perbarui data profil pengguna
-    if (firstname) user.firstname = firstname;
-    if (lastname) user.lastname = lastname;
-    if (username) user.username = username;
+    if (phone_number) user.phone_number = phone_number;
     if (email) user.email = email;
+    if (username) user.username = username;
 
     await user.save();
 
-    return h.response({
-      message: "Profil berhasil diperbarui",
-      user: {
-        id: user.id,
-        firstname: user.firstname,
-        lastname: user.lastname,
-        username: user.username,
-        email: user.email,
-        photoUrl: user.photo,
-      },
-    }).code(200);
+    return h
+      .response({
+        message: "Profil berhasil diperbarui",
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          phone_number: user.phone_number,
+        },
+      })
+      .code(200);
+  } catch (error) {
+    console.error(error);
+    return h.response({ error: "Internal Server Error" }).code(500);
+  }
+};
+// Fungsi: Delete User Account
+const deleteAccount = async (request, h) => {
+  try {
+    const userId = request.auth.credentials.user.id;
+    const user = await User.findByPk(userId);
+
+    if (!user) {
+      return h.response({ error: "User tidak ditemukan" }).code(404);
+    }
+
+    await user.destroy(); // Menghapus pengguna dari database
+
+    return h.response({ message: "Akun berhasil dihapus" }).code(200);
   } catch (error) {
     console.error(error);
     return h.response({ error: "Internal Server Error" }).code(500);
@@ -304,47 +317,48 @@ const forgotPassword = async (request, h) => {
   try {
     const { email } = request.payload;
 
-    // Cari user berdasarkan email
+    if (!email || typeof email !== "string") {
+      return h.response({ error: "Email tidak valid" }).code(400);
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return h.response({ error: "Format email tidak valid" }).code(400);
+    }
+
     const user = await User.findOne({ where: { email } });
     if (!user) {
       return h.response({ error: "Email tidak terdaftar" }).code(404);
     }
 
-    // Generate 6 digit kode OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    otpCache.set(email.toLowerCase(), otp); // Simpan OTP untuk email dalam cache
 
-    // Simpan OTP di memory cache
-    otpCache.set(email, otp);
-
-    // Kirim email OTP
     const transporter = nodemailer.createTransport({
-      service: "gmail", // Ganti dengan layanan email yang kamu gunakan
+      service: "gmail",
       auth: {
-        user: process.env.EMAIL_USER, // Ganti dengan email pengirim
-        pass: process.env.EMAIL_PASSWORD, // Ganti dengan password email pengirim
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
       },
     });
 
     const mailOptions = {
-      from: process.env.EMAIL_USER, // Ganti dengan email pengirim
+      from: process.env.EMAIL_USER,
       to: email,
-      subject: "Kode OTP DokuGo",
+      subject: "Kode OTP Reset Password",
       html: `
-        <p>Halo ${user.firstname},</p>
-        <p>Berikut adalah kode OTP untuk mereset password akun DokuGo kamu:</p>
-        <p style="font-size: 24px; font-weight: bold;">${otp}</p>
-        <p>Kode OTP ini akan kedaluwarsa dalam 1 jam.</p>
-        <p>Jika kamu tidak meminta reset password, abaikan email ini.</p>
+        <p>Halo ${user.username},</p>
+        <p>Berikut adalah kode OTP Anda:</p>
+        <p><strong>${otp}</strong></p>
+        <p>Kode ini akan kedaluwarsa dalam 1 jam.</p>
       `,
     };
 
     await transporter.sendMail(mailOptions);
 
-    return h
-      .response({ message: "Kode OTP telah dikirim ke email Anda" })
-      .code(200);
+    return h.response({ message: "Kode OTP telah dikirim" }).code(200);
   } catch (error) {
-    console.error(error);
+    console.error("Error in forgotPassword:", error);
     return h.response({ error: "Internal Server Error" }).code(500);
   }
 };
@@ -353,43 +367,39 @@ const verifyOtp = async (request, h) => {
   try {
     const { email, otp } = request.payload;
 
-    // Ambil OTP dari memory cache
-    const storedOtp = otpCache.get(email);
+    if (!email || !otp || typeof otp !== "string") {
+      return h.response({ error: "Input tidak valid" }).code(400);
+    }
+
+    const storedOtp = otpCache.get(email.toLowerCase());
     if (!storedOtp) {
       return h
-        .response({ error: "Kode OTP tidak valid atau kedaluwarsa" })
-        .code(401);
+        .response({ error: "Kode OTP tidak ditemukan atau sudah kedaluwarsa" })
+        .code(400);
     }
 
-    // Verifikasi OTP
-    if (otp !== storedOtp) {
-      return h.response({ error: "Kode OTP tidak valid" }).code(401);
+    if (storedOtp !== otp) {
+      return h.response({ error: "Kode OTP salah" }).code(400);
     }
 
-    // Jika OTP valid, generate token reset password
-    const resetToken = jwt.token.generate(
+    const user = await User.findOne({ where: { email } });
+    if (!user) {
+      return h.response({ error: "Email tidak terdaftar" }).code(404);
+    }
+
+    const resetToken = jwtdecode.sign(
+      { userId: user.id },
+      process.env.JWT_SECRET,
       {
-        aud: "urn:audience:users",
-        iss: "urn:issuer:api",
-        user: {
-          id: user.id,
-        },
-      },
-      {
-        key: process.env.JWT_SECRET,
-        algorithm: "HS256",
-      },
-      {
-        ttlSec: 3600, // 1 jam
+        expiresIn: "1h",
       }
     );
 
-    // Hapus OTP dari memory cache
-    otpCache.del(email);
+    otpCache.del(email.toLowerCase()); // Hapus OTP yang sudah digunakan
 
     return h.response({ resetToken }).code(200);
   } catch (error) {
-    console.error(error);
+    console.error("Error in verifyOtp:", error);
     return h.response({ error: "Internal Server Error" }).code(500);
   }
 };
@@ -398,13 +408,27 @@ const resetPassword = async (request, h) => {
   try {
     const { resetToken, newPassword } = request.payload;
 
-    // Verifikasi token reset password
-    const decoded = jwt.token.decode(resetToken, process.env.JWT_SECRET);
-    if (!decoded) {
-      return h.response({ error: "Token tidak valid" }).code(401);
+    // Validasi input
+    if (
+      !resetToken ||
+      typeof resetToken !== "string" ||
+      !newPassword ||
+      typeof newPassword !== "string"
+    ) {
+      return h.response({ error: "Input tidak valid" }).code(400);
     }
 
-    const userId = decoded.decoded.payload.user.id;
+    // Verifikasi token reset password
+    let decoded;
+    try {
+      decoded = jwtdecode.verify(resetToken, process.env.JWT_SECRET);
+    } catch (err) {
+      return h
+        .response({ error: "Token tidak valid atau telah kedaluwarsa" })
+        .code(401);
+    }
+
+    const userId = decoded.userId;
 
     // Cari user berdasarkan ID
     const user = await User.findByPk(userId);
@@ -421,135 +445,18 @@ const resetPassword = async (request, h) => {
 
     return h.response({ message: "Password berhasil diubah" }).code(200);
   } catch (error) {
-    console.error(error);
+    console.error("Error in resetPassword:", error);
     return h.response({ error: "Internal Server Error" }).code(500);
   }
 };
 
-
-const { Transaction } = require("../models/transactionsModel"); // Pastikan path benar
-
-const addTransaction = async (request, h) => {
+const getAllUsers = async (request, h) => {
   try {
-    const { amount, type, category, date, notes, receipt } = request.payload;
-    const userId = request.auth.credentials.user.id; // Mendapatkan userId dari token JWT
-
-    const newTransaction = await Transaction.create({
-      userId,
-      amount,
-      type,
-      category,
-      date,
-      notes,
-      receipt,
-    });
-
-    return h
-      .response({
-        message: "Transaksi berhasil ditambahkan",
-        data: newTransaction,
-      })
-      .code(201);
+    const users = await User.findAll();
+    return h.response(users).code(200);
   } catch (error) {
     console.error(error);
-    return h.response({ error: "Gagal menambahkan transaksi" }).code(500);
-  }
-};
-
-const getTransactions = async (request, h) => {
-  try {
-    const userId = request.auth.credentials.user.id; // Mendapatkan userId dari token JWT
-    const transactions = await Transaction.findAll({ where: { userId } });
-    return h
-      .response({
-        message: "Berhasil mendapatkan daftar transaksi",
-        data: transactions,
-      })
-      .code(200);
-  } catch (error) {
-    console.error(error);
-    return h.response({ error: "Gagal mendapatkan transaksi" }).code(500);
-  }
-};
-
-const getTransaction = async (request, h) => {
-  try {
-    const transactionId = request.params.id;
-    const userId = request.auth.credentials.user.id; // Mendapatkan userId dari token JWT
-
-    const transaction = await Transaction.findOne({
-      where: { id: transactionId, userId },
-    });
-
-    if (!transaction) {
-      return h.response({ error: "Transaksi tidak ditemukan" }).code(404);
-    }
-
-    return h
-      .response({
-        message: "Berhasil mendapatkan detail transaksi",
-        data: transaction,
-      })
-      .code(200);
-  } catch (error) {
-    console.error(error);
-    return h.response({ error: "Gagal mendapatkan transaksi" }).code(500);
-  }
-};
-
-const updateTransaction = async (request, h) => {
-  try {
-    const transactionId = request.params.id;
-    const userId = request.auth.credentials.user.id; // Mendapatkan userId dari token JWT
-    const { amount, type, category, date, notes, receipt } = request.payload;
-
-    const transaction = await Transaction.findOne({
-      where: { id: transactionId, userId },
-    });
-
-    if (!transaction) {
-      return h.response({ error: "Transaksi tidak ditemukan" }).code(404);
-    }
-
-    await transaction.update({
-      amount,
-      type,
-      category,
-      date,
-      notes,
-      receipt,
-    });
-
-    return h
-      .response({ message: "Transaksi berhasil diperbarui" })
-      .code(200);
-  } catch (error) {
-    console.error(error);
-    return h.response({ error: "Gagal mengupdate transaksi" }).code(500);
-  }
-};
-
-const deleteTransaction = async (request, h) => {
-  try {
-    const transactionId = request.params.id;
-    const userId = request.auth.credentials.user.id; // Mendapatkan userId dari token JWT
-
-    const transaction = await Transaction.findOne({
-      where: { id: transactionId, userId },
-    });
-
-    if (!transaction) {
-      return h.response({ error: "Transaksi tidak ditemukan" }).code(404);
-    }
-
-    await transaction.destroy();
-
-    return h
-      .response({ message: "Transaksi berhasil dihapus" })
-      .code(200);
-  } catch (error) {
-    console.error(error);
-    return h.response({ error: "Gagal menghapus transaksi" }).code(500);
+    return h.response({ error: "Internal Server Error" }).code(500);
   }
 };
 
@@ -560,12 +467,9 @@ module.exports = {
   updateProfilePhoto,
   viewProfile,
   editProfile,
-  addTransaction,
-  getTransactions,
-  getTransaction,
-  updateTransaction,
-  deleteTransaction,
+  deleteAccount,
   forgotPassword,
   verifyOtp,
   resetPassword,
+  getAllUsers,
 };

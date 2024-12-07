@@ -11,4 +11,14 @@ const sequelize = new Sequelize(
   }
 );
 
+sequelize
+  .authenticate()
+  .then(() => {
+    console.log("Koneksi ke database berhasil!");
+  })
+  .catch((error) => {
+    console.error("Gagal terhubung ke database:", error);
+  });
+
+
 module.exports = sequelize;

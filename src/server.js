@@ -1,6 +1,11 @@
 const Hapi = require("@hapi/hapi");
 const userRoutes = require("./routes/userRoutes");
 require("dotenv").config();
+const transactionsRoutes = require("./routes/transactionsRoutes");
+const predictionRoutes = require("./routes/predictionRoutes");
+const { processNewTransactions } = require('./controllers/predictionController');
+
+
 
 const init = async () => {
   const server = Hapi.server({
@@ -29,9 +34,22 @@ const init = async () => {
 
   // Registrasi rute
   userRoutes(server);
+  transactionsRoutes(server);
+
+  await server.register(predictionRoutes);
 
   await server.start();
   console.log(`Server berjalan pada ${server.info.uri}`);
 };
+
+// // Jalankan proses setiap 10 detik
+// setInterval(() => {
+//   processNewTransactions();
+// }, 10000);
+
+process.on("unhandledRejection", (err) => {
+  console.log(err);
+  process.exit(1);
+});
 
 init();
