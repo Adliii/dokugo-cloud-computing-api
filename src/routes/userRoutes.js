@@ -9,7 +9,16 @@ const {
   forgotPassword,
   verifyOtp,
   resetPassword,
+<<<<<<< HEAD
   getAllUsers,
+=======
+  addTransaction,
+  getTransactions,
+  getTransaction,
+  updateTransaction,
+  deleteTransaction,
+  predictExpenses, // Fungsi prediksi
+>>>>>>> 820fddf750357d5fe1dc38fb1458ac4480f1a34c
 } = require("../controllers/usersController");
 
 const userRoutes = (server) => {

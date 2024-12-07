@@ -6,9 +6,16 @@ const jwt = require("@hapi/jwt");
 const nodemailer = require("nodemailer");
 const jwtdecode = require("jsonwebtoken");
 const { nanoid } = require("nanoid");
+<<<<<<< HEAD
 const { Op } = require("sequelize");
 const NodeCache = require("node-cache");
 const otpCache = new NodeCache({ stdTTL: 300 }); // Cache dengan TTL (Time to Live) 5 Menit
+=======
+const nodemailer = require("nodemailer"); 
+const axios = require("axios");
+const otpCache = {}; 
+
+>>>>>>> 820fddf750357d5fe1dc38fb1458ac4480f1a34c
 
 // Skema Validasi JOI untuk registrasi
 const registerSchema = Joi.object({
@@ -367,11 +374,21 @@ const verifyOtp = async (request, h) => {
   try {
     const { email, otp } = request.payload;
 
+<<<<<<< HEAD
     if (!email || !otp || typeof otp !== "string") {
       return h.response({ error: "Input tidak valid" }).code(400);
     }
 
     const storedOtp = otpCache.get(email.toLowerCase());
+=======
+    // Periksa apakah OTP ada di cache
+  if (!otpCache[email] || otpCache[email] !== otp) {
+    return h.response({ error: "OTP tidak valid atau sudah kedaluwarsa" }).code(400);
+  }
+
+    // Ambil OTP dari memory cache
+    const storedOtp = otpCache.get(email);
+>>>>>>> 820fddf750357d5fe1dc38fb1458ac4480f1a34c
     if (!storedOtp) {
       return h
         .response({ error: "Kode OTP tidak ditemukan atau sudah kedaluwarsa" })
@@ -460,6 +477,34 @@ const getAllUsers = async (request, h) => {
   }
 };
 
+const predictExpenses = async (request, h) => {
+  try {
+    const { amount, lag_1_expenses, lag_2_expenses, category_encoded, day_of_week, is_weekend } = request.payload;
+
+    // Data yang akan dikirim ke API Flask
+    const inputData = {
+      amount,
+      Lag_1_Expenses: lag_1_expenses,
+      Lag_2_Expenses: lag_2_expenses,
+      category_encoded,
+      day_of_week,
+      is_weekend,
+    };
+
+    // Panggil API Flask
+    const response = await axios.post("http://localhost:5000/predict", inputData);
+
+    return h.response({
+      message: "Prediksi berhasil",
+      prediction: response.data,
+    }).code(200);
+  } catch (error) {
+    console.error("Error saat memanggil API Flask:", error.message);
+    return h.response({ error: "Gagal melakukan prediksi" }).code(500);
+  }
+};
+
+
 module.exports = {
   register,
   login,
@@ -471,5 +516,9 @@ module.exports = {
   forgotPassword,
   verifyOtp,
   resetPassword,
+<<<<<<< HEAD
   getAllUsers,
+=======
+  predictExpenses,
+>>>>>>> 820fddf750357d5fe1dc38fb1458ac4480f1a34c
 };
